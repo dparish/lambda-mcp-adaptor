@@ -4,13 +4,13 @@
  * Provides authentication middleware for MCP Lambda handlers
  */
 
-import { validateBearerToken } from './bearer-token.js';
-import { CORS_HEADERS, withBasicCORS } from '../cors-config.js';
+import { validateBearerToken } from './bearer-token';
+import { CORS_HEADERS, withBasicCORS } from '../cors-config';
 import type {
   AuthConfig,
   AuthValidationResult,
   LambdaEvent,
-} from './index.js';
+} from './index';
 import type { APIGatewayProxyResult, Context } from 'aws-lambda';
 
 /**

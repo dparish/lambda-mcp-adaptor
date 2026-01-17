@@ -8,7 +8,7 @@ var __export = (target, all) => {
     __defProp(target, name, { get: all[name], enumerable: true });
 };
 
-// src/cors-config.mjs
+// src/cors-config.ts
 function withCORS(additionalHeaders = {}) {
   return {
     ...CORS_HEADERS,
@@ -23,7 +23,8 @@ function withBasicCORS(additionalHeaders = {}) {
 }
 var CORS_HEADERS, BASIC_CORS_HEADERS;
 var init_cors_config = __esm({
-  "src/cors-config.mjs"() {
+  "src/cors-config.ts"() {
+    "use strict";
     CORS_HEADERS = {
       "Access-Control-Allow-Origin": "*",
       "Access-Control-Allow-Headers": "Content-Type, Accept, Authorization, Mcp-Protocol-Version, Mcp-Session-Id",
@@ -35,7 +36,7 @@ var init_cors_config = __esm({
   }
 });
 
-// src/auth/bearer-token.mjs
+// src/auth/bearer-token.ts
 function createAuthErrorResponse(statusCode, error, message, additionalHeaders = {}) {
   const headers = withCORS({
     "Content-Type": "application/json",
@@ -50,7 +51,7 @@ function createAuthErrorResponse(statusCode, error, message, additionalHeaders =
     })
   };
 }
-function validateBearerToken(event, config = {}) {
+async function validateBearerToken(event, config = { type: "bearer-token" }) {
   const authHeader = event.headers?.authorization || event.headers?.Authorization;
   if (!authHeader) {
     return {
@@ -77,7 +78,7 @@ function validateBearerToken(event, config = {}) {
   const token = authHeader.substring(7);
   if (config.validate && typeof config.validate === "function") {
     try {
-      const result = config.validate(token, event);
+      const result = await config.validate(token, event);
       if (result && result.isValid) {
         return {
           isValid: true,
@@ -137,19 +138,20 @@ function validateBearerToken(event, config = {}) {
   };
 }
 var init_bearer_token = __esm({
-  "src/auth/bearer-token.mjs"() {
+  "src/auth/bearer-token.ts"() {
+    "use strict";
     init_cors_config();
   }
 });
 
-// src/auth/middleware.mjs
+// src/auth/middleware.ts
 var middleware_exports = {};
 __export(middleware_exports, {
   createAuthMiddleware: () => createAuthMiddleware,
   createAuthenticatedHandler: () => createAuthenticatedHandler
 });
 function handleCORSPreflight(event) {
-  const method = event.requestContext?.http?.method || event.httpMethod;
+  const method = "httpMethod" in event ? event.httpMethod : event.requestContext?.http?.method;
   if (method === "OPTIONS") {
     return {
       statusCode: 200,
@@ -168,7 +170,7 @@ function createAuthMiddleware(authConfig) {
     let authResult;
     switch (authConfig.type) {
       case "bearer-token":
-        authResult = validateBearerToken(event, authConfig);
+        authResult = await validateBearerToken(event, authConfig);
         break;
       default:
         console.error(`Unsupported authentication type: ${authConfig.type}`);
@@ -182,8 +184,16 @@ function createAuthMiddleware(authConfig) {
         };
     }
     if (!authResult.isValid) {
-      console.log("Authentication failed:", authResult.error.body);
-      return authResult.error;
+      console.log("Authentication failed:", authResult.error?.body);
+      const fallbackError = {
+        statusCode: 401,
+        headers: withBasicCORS({ "Content-Type": "application/json" }),
+        body: JSON.stringify({
+          error: "unauthorized",
+          message: "Authentication failed"
+        })
+      };
+      return authResult.error ?? fallbackError;
     }
     event.user = authResult.user;
     event.authToken = authResult.token;
@@ -193,7 +203,7 @@ function createAuthMiddleware(authConfig) {
 }
 function createAuthenticatedHandler(originalHandler, authConfig) {
   const authMiddleware = createAuthMiddleware(authConfig);
-  return async (event) => {
+  return async (event, context) => {
     console.log("=== MCP Server Request Start (with Authentication) ===");
     console.log("Event:", JSON.stringify(event, null, 2));
     try {
@@ -201,7 +211,7 @@ function createAuthenticatedHandler(originalHandler, authConfig) {
       if (authResponse) {
         return authResponse;
       }
-      const response = await originalHandler(event);
+      const response = await originalHandler(event, context);
       console.log("=== MCP Server Request End ===");
       return response;
     } catch (error) {
@@ -218,13 +228,17 @@ function createAuthenticatedHandler(originalHandler, authConfig) {
   };
 }
 var init_middleware = __esm({
-  "src/auth/middleware.mjs"() {
+  "src/auth/middleware.ts"() {
+    "use strict";
     init_bearer_token();
     init_cors_config();
   }
 });
 
-// src/schema-utils.mjs
+// src/mcp-server.ts
+import { z as z2 } from "zod";
+
+// src/schema-utils.ts
 import { z } from "zod";
 function zodToJsonSchema(zodSchema) {
   const properties = {};
@@ -243,17 +257,20 @@ function zodToJsonSchema(zodSchema) {
 }
 function convertZodTypeToJsonSchema(zodType) {
   if (zodType instanceof z.ZodOptional) {
-    return convertZodTypeToJsonSchema(zodType._def.innerType);
+    const def = zodType._def;
+    return convertZodTypeToJsonSchema(def.innerType);
   }
   if (zodType instanceof z.ZodDefault) {
-    const schema = convertZodTypeToJsonSchema(zodType._def.innerType);
-    schema.default = zodType._def.defaultValue();
+    const def = zodType._def;
+    const schema = convertZodTypeToJsonSchema(def.innerType);
+    schema.default = def.defaultValue();
     return schema;
   }
   if (zodType instanceof z.ZodString) {
     const schema = { type: "string" };
-    if (zodType._def.checks) {
-      for (const check of zodType._def.checks) {
+    const def = zodType._def;
+    if (def.checks) {
+      for (const check of def.checks) {
         switch (check.kind) {
           case "min":
             schema.minLength = check.value;
@@ -280,8 +297,9 @@ function convertZodTypeToJsonSchema(zodType) {
   }
   if (zodType instanceof z.ZodNumber) {
     const schema = { type: "number" };
-    if (zodType._def.checks) {
-      for (const check of zodType._def.checks) {
+    const def = zodType._def;
+    if (def.checks) {
+      for (const check of def.checks) {
         switch (check.kind) {
           case "min":
             schema.minimum = check.value;
@@ -308,9 +326,10 @@ function convertZodTypeToJsonSchema(zodType) {
     return schema;
   }
   if (zodType instanceof z.ZodEnum) {
+    const def = zodType._def;
     const schema = {
       type: "string",
-      enum: zodType._def.values
+      enum: def.values
     };
     if (zodType.description) {
       schema.description = zodType.description;
@@ -363,7 +382,7 @@ function validateWithZod(zodSchema, args) {
         {
           code: "custom",
           path: [key],
-          message: `${error.message}`
+          message: error instanceof Error ? error.message : String(error)
         }
       ]);
     }
@@ -371,15 +390,26 @@ function validateWithZod(zodSchema, args) {
   return validated;
 }
 
-// src/mcp-server.mjs
+// src/mcp-server.ts
 var MCPServer = class {
+  config;
+  tools;
+  resources;
+  prompts;
   constructor(config) {
+    const {
+      name = "MCP Server",
+      version = "1.0.0",
+      description = "MCP Server powered by AWS Lambda",
+      protocolVersion = "2025-03-26",
+      ...rest
+    } = config;
     this.config = {
-      name: config.name || "MCP Server",
-      version: config.version || "1.0.0",
-      description: config.description || "MCP Server powered by AWS Lambda",
-      protocolVersion: config.protocolVersion || "2025-03-26",
-      ...config
+      name,
+      version,
+      description,
+      protocolVersion,
+      ...rest
     };
     this.tools = /* @__PURE__ */ new Map();
     this.resources = /* @__PURE__ */ new Map();
@@ -390,12 +420,13 @@ var MCPServer = class {
    */
   tool(name, inputSchema, handler) {
     const jsonSchema = zodToJsonSchema(inputSchema);
+    const handlerDescription = handler.description;
     const validatedHandler = async (args) => {
       try {
         const validatedArgs = validateWithZod(inputSchema, args);
         return await handler(validatedArgs);
       } catch (error) {
-        if (error.name === "ZodError") {
+        if (error instanceof z2.ZodError) {
           throw new Error(
             `Validation error: ${error.errors.map((e) => `${e.path.join(".")}: ${e.message}`).join(", ")}`
           );
@@ -405,7 +436,7 @@ var MCPServer = class {
     };
     this.tools.set(name, {
       name,
-      description: handler.description || `Tool: ${name}`,
+      description: handlerDescription || `Tool: ${name}`,
       inputSchema: jsonSchema,
       handler: validatedHandler
     });
@@ -415,11 +446,12 @@ var MCPServer = class {
    * Register a resource
    */
   resource(name, uri, handler) {
+    const handlerDescription = handler.description;
     this.resources.set(name, {
       name,
       uri,
-      description: handler.description || `Resource: ${name}`,
-      handler
+      description: handlerDescription || `Resource: ${name}`,
+      handler: async (resourceUri) => handler(resourceUri)
     });
     return this;
   }
@@ -428,12 +460,13 @@ var MCPServer = class {
    */
   prompt(name, inputSchema, handler) {
     zodToJsonSchema(inputSchema);
+    const handlerDescription = handler.description;
     const validatedHandler = async (args) => {
       try {
         const validatedArgs = validateWithZod(inputSchema, args);
         return await handler(validatedArgs);
       } catch (error) {
-        if (error.name === "ZodError") {
+        if (error instanceof z2.ZodError) {
           throw new Error(
             `Validation error: ${error.errors.map((e) => `${e.path.join(".")}: ${e.message}`).join(", ")}`
           );
@@ -443,7 +476,7 @@ var MCPServer = class {
     };
     this.prompts.set(name, {
       name,
-      description: handler.description || `Prompt: ${name}`,
+      description: handlerDescription || `Prompt: ${name}`,
       arguments: Object.entries(inputSchema).map(([key, schema]) => ({
         name: key,
         description: schema.description || `${key} parameter`,
@@ -459,19 +492,19 @@ var MCPServer = class {
   async handleRequest(request) {
     switch (request.method) {
       case "initialize":
-        return this.handleInitialize(request.params || {});
+        return this.handleInitialize();
       case "notifications/initialized":
         return null;
       case "tools/list":
-        return this.handleToolsList(request.params || {});
+        return this.handleToolsList();
       case "tools/call":
         return this.handleToolsCall(request.params);
       case "resources/list":
-        return this.handleResourcesList(request.params || {});
+        return this.handleResourcesList();
       case "resources/read":
         return this.handleResourcesRead(request.params);
       case "prompts/list":
-        return this.handlePromptsList(request.params || {});
+        return this.handlePromptsList();
       case "prompts/get":
         return this.handlePromptsGet(request.params);
       default:
@@ -522,8 +555,9 @@ var MCPServer = class {
       const result = await tool.handler(params.arguments || {});
       return result;
     } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
       return {
-        content: [{ type: "text", text: `Error: ${error.message}` }],
+        content: [{ type: "text", text: `Error: ${errorMessage}` }],
         isError: true
       };
     }
@@ -556,7 +590,8 @@ var MCPServer = class {
       const result = await resource.handler(params.uri);
       return result;
     } catch (error) {
-      throw new Error(`Resource read error: ${error.message}`);
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      throw new Error(`Resource read error: ${errorMessage}`);
     }
   }
   /**
@@ -585,7 +620,8 @@ var MCPServer = class {
       const result = await prompt.handler(params.arguments || {});
       return result;
     } catch (error) {
-      throw new Error(`Prompt execution error: ${error.message}`);
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      throw new Error(`Prompt execution error: ${errorMessage}`);
     }
   }
   /**
@@ -601,7 +637,7 @@ var MCPServer = class {
   }
 };
 
-// src/lambda-adapter.mjs
+// src/lambda-adapter.ts
 init_cors_config();
 function createResponse(body, statusCode = 200, headers = {}) {
   return {
@@ -645,13 +681,14 @@ async function handleMCPRequest(mcpServer, body, headers, corsHeaders) {
       corsHeaders
     );
   }
+  const responseId = "id" in jsonRpcMessage ? jsonRpcMessage.id : null;
   if (!jsonRpcMessage.jsonrpc || jsonRpcMessage.jsonrpc !== "2.0") {
     return createErrorResponse(
       400,
       -32600,
       "Invalid Request: missing jsonrpc field",
       corsHeaders,
-      jsonRpcMessage.id
+      responseId
     );
   }
   if (!jsonRpcMessage.method) {
@@ -660,7 +697,7 @@ async function handleMCPRequest(mcpServer, body, headers, corsHeaders) {
       -32600,
       "Invalid Request: missing method field",
       corsHeaders,
-      jsonRpcMessage.id
+      responseId
     );
   }
   try {
@@ -672,7 +709,7 @@ async function handleMCPRequest(mcpServer, body, headers, corsHeaders) {
       {
         jsonrpc: "2.0",
         result,
-        id: jsonRpcMessage.id
+        id: responseId
       },
       200,
       corsHeaders
@@ -680,10 +717,10 @@ async function handleMCPRequest(mcpServer, body, headers, corsHeaders) {
   } catch (error) {
     console.error("MCP request error:", error);
     let errorCode = -32603;
-    let errorMessage = error.message;
-    if (error.message.includes("Method not found")) {
+    let errorMessage = error instanceof Error ? error.message : String(error);
+    if (errorMessage.includes("Method not found")) {
       errorCode = -32601;
-    } else if (error.message.includes("not found") || error.message.includes("required")) {
+    } else if (errorMessage.includes("not found") || errorMessage.includes("required")) {
       errorCode = -32602;
     }
     return createErrorResponse(
@@ -691,14 +728,14 @@ async function handleMCPRequest(mcpServer, body, headers, corsHeaders) {
       errorCode,
       errorMessage,
       corsHeaders,
-      jsonRpcMessage.id
+      responseId
     );
   }
 }
 function createLambdaHandler(mcpServer, options = {}) {
   const baseHandler = async (event) => {
     try {
-      const method = event.httpMethod || event.requestContext?.http?.method;
+      const method = "httpMethod" in event ? event.httpMethod : event.requestContext?.http?.method;
       const headers = event.headers || {};
       if (method === "OPTIONS") {
         return createResponse("", 200, CORS_HEADERS);
@@ -736,12 +773,13 @@ function createLambdaHandler(mcpServer, options = {}) {
     }
   };
   if (options.auth) {
+    const authConfig = options.auth;
     return async (event, context) => {
       try {
         const { createAuthenticatedHandler: createAuthenticatedHandler2 } = await Promise.resolve().then(() => (init_middleware(), middleware_exports));
         const authenticatedHandler = createAuthenticatedHandler2(
           baseHandler,
-          options.auth
+          authConfig
         );
         return await authenticatedHandler(event, context);
       } catch (error) {
@@ -760,28 +798,28 @@ function createLambdaHandler(mcpServer, options = {}) {
   return baseHandler;
 }
 
-// src/common-schemas.mjs
-import { z as z2 } from "zod";
+// src/common-schemas.ts
+import { z as z3 } from "zod";
 var CommonSchemas = {
   // Basic types
-  string: z2.string(),
-  number: z2.number(),
-  boolean: z2.boolean(),
+  string: z3.string(),
+  number: z3.number(),
+  boolean: z3.boolean(),
   // Optional types
-  optionalString: z2.string().optional(),
-  optionalNumber: z2.number().optional(),
-  optionalBoolean: z2.boolean().optional(),
+  optionalString: z3.string().optional(),
+  optionalNumber: z3.number().optional(),
+  optionalBoolean: z3.boolean().optional(),
   // Common patterns
-  email: z2.string().email(),
-  url: z2.string().url(),
-  uuid: z2.string().uuid(),
+  email: z3.string().email(),
+  url: z3.string().url(),
+  uuid: z3.string().uuid(),
   // Utility functions
-  enum: (values) => z2.enum(values),
-  array: (itemSchema) => z2.array(itemSchema),
-  object: (shape) => z2.object(shape)
+  enum: (values) => z3.enum(values),
+  array: (itemSchema) => z3.array(itemSchema),
+  object: (shape) => z3.object(shape)
 };
 
-// src/index.mjs
+// src/index.ts
 function createMCPServer(config) {
   return new MCPServer(config);
 }

@@ -20,12 +20,12 @@ import type {
   ReadResourceRequestParams,
   ReadResourceResult,
   Tool,
-} from './mcp-spec.js';
+} from './mcp-spec';
 import {
   zodToJsonSchema,
   validateWithZod,
   isZodOptional,
-} from './schema-utils.js';
+} from './schema-utils';
 
 export interface MCPServerConfig {
   name: string;

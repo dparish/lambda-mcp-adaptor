@@ -3,9 +3,9 @@
  */
 
 import { beforeEach, describe, expect, it } from 'vitest';
-import { createMCPServer, createLambdaHandler } from '../src/index.js';
+import { createMCPServer, createLambdaHandler } from '../src/index';
 import { z } from 'zod';
-import type { MCPServer } from '../src/mcp-server.js';
+import type { MCPServer } from '../src/mcp-server';
 
 describe('lambda-mcp-adaptor', () => {
   let server: MCPServer;

@@ -4,12 +4,12 @@
  * Provides Bearer token validation functionality for MCP servers
  */
 
-import { withCORS } from '../cors-config.js';
+import { withCORS } from '../cors-config';
 import type {
   AuthValidationResult,
   BearerTokenAuthConfig,
   LambdaEvent,
-} from './index.js';
+} from './index';
 import type { APIGatewayProxyResult } from 'aws-lambda';
 
 /**

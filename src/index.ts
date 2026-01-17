@@ -6,12 +6,12 @@
  */
 
 // Core imports
-import { MCPServer } from './mcp-server.js';
+import { MCPServer } from './mcp-server';
 
 // Core exports
-export { MCPServer } from './mcp-server.js';
-export { createLambdaHandler } from './lambda-adapter.js';
-export { CommonSchemas } from './common-schemas.js';
+export { MCPServer } from './mcp-server';
+export { createLambdaHandler } from './lambda-adapter';
+export { CommonSchemas } from './common-schemas';
 
 // Convenience function
 export function createMCPServer(config: ConstructorParameters<typeof MCPServer>[0]) {

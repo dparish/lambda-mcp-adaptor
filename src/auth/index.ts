@@ -39,12 +39,12 @@ export {
   validateBearerToken,
   createBearerTokenConfigFromEnv,
   createBearerTokenConfigWithValidation,
-} from './bearer-token.js';
+} from './bearer-token';
 
 export {
   createAuthMiddleware,
   createAuthenticatedHandler,
-} from './middleware.js';
+} from './middleware';
 
 /**
  * Authentication configuration presets

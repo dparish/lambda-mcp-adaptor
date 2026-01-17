@@ -7,16 +7,16 @@
 import type {
   JSONRPCNotification,
   JSONRPCRequest,
-} from './mcp-spec.js';
+} from './mcp-spec';
 import type {
   APIGatewayProxyEvent,
   APIGatewayProxyEventV2,
   APIGatewayProxyResult,
   Context,
 } from 'aws-lambda';
-import type { AuthConfig } from './auth/index.js';
-import { CORS_HEADERS, withBasicCORS } from './cors-config.js';
-import type { MCPServer } from './mcp-server.js';
+import type { AuthConfig } from './auth/index';
+import { CORS_HEADERS, withBasicCORS } from './cors-config';
+import type { MCPServer } from './mcp-server';
 
 type LambdaEvent = APIGatewayProxyEvent | APIGatewayProxyEventV2;
 type LambdaHandler = (
@@ -216,7 +216,7 @@ export function createLambdaHandler(
     return async (event: LambdaEvent, context: Context) => {
       try {
         const { createAuthenticatedHandler } = await import(
-          './auth/middleware.js'
+          './auth/middleware'
         );
         const authenticatedHandler = createAuthenticatedHandler(
           baseHandler,
