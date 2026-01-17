@@ -5,13 +5,14 @@
  */
 
 import { z } from 'zod';
+import type { JSONSchema7, JSONSchema7Type } from 'json-schema';
 
 /**
  * Convert Zod schema to JSON Schema
  */
-export function zodToJsonSchema(zodSchema) {
-  const properties = {};
-  const required = [];
+export function zodToJsonSchema(zodSchema: z.ZodRawShape): JSONSchema7 {
+  const properties: Record<string, JSONSchema7> = {};
+  const required: string[] = [];
 
   for (const [key, schema] of Object.entries(zodSchema)) {
     properties[key] = convertZodTypeToJsonSchema(schema);
@@ -31,26 +32,34 @@ export function zodToJsonSchema(zodSchema) {
 /**
  * Convert individual Zod type to JSON Schema
  */
-function convertZodTypeToJsonSchema(zodType) {
+function convertZodTypeToJsonSchema(zodType: z.ZodTypeAny): JSONSchema7 {
+  type ZodCheck = { kind: string; value?: number };
+
   // Handle ZodOptional
   if (zodType instanceof z.ZodOptional) {
-    return convertZodTypeToJsonSchema(zodType._def.innerType);
+    const def = zodType._def as unknown as { innerType: z.ZodTypeAny };
+    return convertZodTypeToJsonSchema(def.innerType);
   }
 
   // Handle ZodDefault
   if (zodType instanceof z.ZodDefault) {
-    const schema = convertZodTypeToJsonSchema(zodType._def.innerType);
-    schema.default = zodType._def.defaultValue();
+    const def = zodType._def as unknown as {
+      innerType: z.ZodTypeAny;
+      defaultValue: () => unknown;
+    };
+    const schema = convertZodTypeToJsonSchema(def.innerType);
+    schema.default = def.defaultValue() as JSONSchema7Type;
     return schema;
   }
 
   // Handle ZodString
   if (zodType instanceof z.ZodString) {
-    const schema = { type: 'string' };
+    const schema: JSONSchema7 = { type: 'string' };
 
     // Add constraints
-    if (zodType._def.checks) {
-      for (const check of zodType._def.checks) {
+    const def = zodType._def as unknown as { checks?: ZodCheck[] };
+    if (def.checks) {
+      for (const check of def.checks) {
         switch (check.kind) {
           case 'min':
             schema.minLength = check.value;
@@ -80,10 +89,11 @@ function convertZodTypeToJsonSchema(zodType) {
 
   // Handle ZodNumber
   if (zodType instanceof z.ZodNumber) {
-    const schema = { type: 'number' };
+    const schema: JSONSchema7 = { type: 'number' };
 
-    if (zodType._def.checks) {
-      for (const check of zodType._def.checks) {
+    const def = zodType._def as unknown as { checks?: ZodCheck[] };
+    if (def.checks) {
+      for (const check of def.checks) {
         switch (check.kind) {
           case 'min':
             schema.minimum = check.value;
@@ -107,7 +117,7 @@ function convertZodTypeToJsonSchema(zodType) {
 
   // Handle ZodBoolean
   if (zodType instanceof z.ZodBoolean) {
-    const schema = { type: 'boolean' };
+    const schema: JSONSchema7 = { type: 'boolean' };
 
     if (zodType.description) {
       schema.description = zodType.description;
@@ -118,9 +128,10 @@ function convertZodTypeToJsonSchema(zodType) {
 
   // Handle ZodEnum
   if (zodType instanceof z.ZodEnum) {
-    const schema = {
+    const def = zodType._def as unknown as { values: string[] };
+    const schema: JSONSchema7 = {
       type: 'string',
-      enum: zodType._def.values,
+      enum: def.values,
     };
 
     if (zodType.description) {
@@ -132,10 +143,10 @@ function convertZodTypeToJsonSchema(zodType) {
 
   // Handle ZodArray
   if (zodType instanceof z.ZodArray) {
-    const schema = {
+    const schema: JSONSchema7 = {
       type: 'array',
       items: convertZodTypeToJsonSchema(zodType._def.type),
-    };
+    } ;
 
     if (zodType._def.minLength) {
       schema.minItems = zodType._def.minLength.value;
@@ -167,43 +178,50 @@ function convertZodTypeToJsonSchema(zodType) {
 /**
  * Check if Zod type is optional
  */
-export function isZodOptional(zodType) {
+export function isZodOptional(zodType: z.ZodTypeAny): boolean {
   return zodType instanceof z.ZodOptional || zodType instanceof z.ZodDefault;
 }
 
 /**
  * Check if Zod type has default value
  */
-export function hasZodDefault(zodType) {
+export function hasZodDefault(zodType: z.ZodTypeAny): boolean {
   return zodType instanceof z.ZodDefault;
 }
 
 /**
  * Validate arguments with Zod schema
  */
-export function validateWithZod(zodSchema, args) {
-  const validated = {};
+export function validateWithZod<T extends z.ZodRawShape>(
+  zodSchema: T,
+  args: Record<string, unknown>
+): z.infer<z.ZodObject<T>> {
+  const validated: Partial<z.infer<z.ZodObject<T>>> = {};
 
   for (const [key, schema] of Object.entries(zodSchema)) {
     try {
-      if (args[key] === undefined && isZodOptional(schema)) {
+      if (args[key] === undefined && isZodOptional(schema as z.ZodTypeAny)) {
         if (hasZodDefault(schema)) {
-          validated[key] = schema.parse(undefined);
+          validated[key as keyof typeof validated] = (
+            schema as z.ZodDefault<z.ZodTypeAny>
+          ).parse(undefined);
         }
         continue;
       }
 
-      validated[key] = schema.parse(args[key]);
+      validated[key as keyof typeof validated] = (
+        schema as z.ZodTypeAny
+      ).parse(args[key]);
     } catch (error) {
       throw new z.ZodError([
         {
           code: 'custom',
           path: [key],
-          message: `${error.message}`,
+          message: error instanceof Error ? error.message : String(error),
         },
       ]);
     }
   }
 
-  return validated;
+  return validated as z.infer<z.ZodObject<T>>;
 }

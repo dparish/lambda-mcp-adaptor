@@ -3,11 +3,12 @@
  */
 
 import { expect } from 'chai';
-import { createMCPServer, createLambdaHandler } from '../src/index.mjs';
+import { createMCPServer, createLambdaHandler } from '../src/index.js';
 import { z } from 'zod';
+import type { MCPServer } from '../src/mcp-server.js';
 
 describe('lambda-mcp-adaptor', function() {
-  let server;
+  let server: MCPServer;
   
   beforeEach(function() {
     server = createMCPServer({

@@ -4,7 +4,13 @@
  * Provides Bearer token validation functionality for MCP servers
  */
 
-import { withCORS } from '../cors-config.mjs';
+import { withCORS } from '../cors-config.js';
+import type {
+  AuthValidationResult,
+  BearerTokenAuthConfig,
+  LambdaEvent,
+} from './index.js';
+import type { APIGatewayProxyResult } from 'aws-lambda';
 
 /**
  * Creates an authentication error response
@@ -15,11 +21,11 @@ import { withCORS } from '../cors-config.mjs';
  * @returns {Object} Lambda response object
  */
 function createAuthErrorResponse(
-  statusCode,
-  error,
-  message,
-  additionalHeaders = {}
-) {
+  statusCode: number,
+  error: string,
+  message: string,
+  additionalHeaders: Record<string, string> = {}
+): APIGatewayProxyResult {
   const headers = withCORS({
     'Content-Type': 'application/json',
     ...additionalHeaders,
@@ -41,7 +47,10 @@ function createAuthErrorResponse(
  * @param {Object} config - Authentication configuration
  * @returns {Object} Validation result with isValid flag and error/user data
  */
-export function validateBearerToken(event, config = {}) {
+export async function validateBearerToken(
+  event: LambdaEvent,
+  config: BearerTokenAuthConfig = { type: 'bearer-token' }
+): Promise<AuthValidationResult> {
   const authHeader =
     event.headers?.authorization || event.headers?.Authorization;
 
@@ -76,7 +85,7 @@ export function validateBearerToken(event, config = {}) {
   // Handle custom validation function
   if (config.validate && typeof config.validate === 'function') {
     try {
-      const result = config.validate(token, event);
+      const result = await config.validate(token, event);
       if (result && result.isValid) {
         return {
           isValid: true,
@@ -148,7 +157,9 @@ export function validateBearerToken(event, config = {}) {
  * @param {string} envVar - Environment variable name containing comma-separated tokens
  * @returns {Object} Authentication configuration
  */
-export function createBearerTokenConfigFromEnv(envVar = 'VALID_TOKENS') {
+export function createBearerTokenConfigFromEnv(
+  envVar: string = 'VALID_TOKENS'
+): BearerTokenAuthConfig {
   const tokens = (process.env[envVar] || '').split(',').filter((t) => t.trim());
 
   return {
@@ -162,7 +173,9 @@ export function createBearerTokenConfigFromEnv(envVar = 'VALID_TOKENS') {
  * @param {Function} validateFn - Custom validation function
  * @returns {Object} Authentication configuration
  */
-export function createBearerTokenConfigWithValidation(validateFn) {
+export function createBearerTokenConfigWithValidation(
+  validateFn: BearerTokenAuthConfig['validate']
+): BearerTokenAuthConfig {
   return {
     type: 'bearer-token',
     validate: validateFn,

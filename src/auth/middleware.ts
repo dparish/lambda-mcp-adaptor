@@ -4,16 +4,25 @@
  * Provides authentication middleware for MCP Lambda handlers
  */
 
-import { validateBearerToken } from './bearer-token.mjs';
-import { CORS_HEADERS, withBasicCORS } from '../cors-config.mjs';
+import { validateBearerToken } from './bearer-token.js';
+import { CORS_HEADERS, withBasicCORS } from '../cors-config.js';
+import type {
+  AuthConfig,
+  AuthValidationResult,
+  LambdaEvent,
+} from './index.js';
+import type { APIGatewayProxyResult, Context } from 'aws-lambda';
 
 /**
  * Handles CORS preflight requests
  * @param {Object} event - Lambda event object
  * @returns {Object|null} CORS response or null if not a preflight request
  */
-function handleCORSPreflight(event) {
-  const method = event.requestContext?.http?.method || event.httpMethod;
+function handleCORSPreflight(
+  event: LambdaEvent
+): APIGatewayProxyResult | null {
+  const method =
+    'httpMethod' in event ? event.httpMethod : event.requestContext?.http?.method;
 
   if (method === 'OPTIONS') {
     return {
@@ -31,8 +40,8 @@ function handleCORSPreflight(event) {
  * @param {Object} authConfig - Authentication configuration
  * @returns {Function} Middleware function
  */
-export function createAuthMiddleware(authConfig) {
-  return async (event) => {
+export function createAuthMiddleware(authConfig: AuthConfig) {
+  return async (event: LambdaEvent): Promise<APIGatewayProxyResult | null> => {
     // Handle CORS preflight requests
     const corsResponse = handleCORSPreflight(event);
     if (corsResponse) {
@@ -40,11 +49,11 @@ export function createAuthMiddleware(authConfig) {
     }
 
     // Perform authentication based on type
-    let authResult;
+    let authResult: AuthValidationResult;
 
     switch (authConfig.type) {
       case 'bearer-token':
-        authResult = validateBearerToken(event, authConfig);
+        authResult = await validateBearerToken(event, authConfig);
         break;
 
       default:
@@ -61,13 +70,22 @@ export function createAuthMiddleware(authConfig) {
 
     // Handle authentication failure
     if (!authResult.isValid) {
-      console.log('Authentication failed:', authResult.error.body);
-      return authResult.error;
+      console.log('Authentication failed:', authResult.error?.body);
+      const fallbackError: APIGatewayProxyResult = {
+        statusCode: 401,
+        headers: withBasicCORS({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify({
+          error: 'unauthorized',
+          message: 'Authentication failed',
+        }),
+      };
+      return authResult.error ?? fallbackError;
     }
 
     // Authentication successful - add user context to event
-    event.user = authResult.user;
-    event.authToken = authResult.token;
+    (event as LambdaEvent & { user?: AuthValidationResult['user'] }).user =
+      authResult.user;
+    (event as LambdaEvent & { authToken?: string }).authToken = authResult.token;
 
     console.log('Authentication successful');
     return null; // Continue to next middleware/handler
@@ -80,10 +98,16 @@ export function createAuthMiddleware(authConfig) {
  * @param {Object} authConfig - Authentication configuration
  * @returns {Function} Wrapped handler with authentication
  */
-export function createAuthenticatedHandler(originalHandler, authConfig) {
+export function createAuthenticatedHandler(
+  originalHandler: (
+    event: LambdaEvent,
+    context: Context
+  ) => Promise<APIGatewayProxyResult>,
+  authConfig: AuthConfig
+): (event: LambdaEvent, context: Context) => Promise<APIGatewayProxyResult> {
   const authMiddleware = createAuthMiddleware(authConfig);
 
-  return async (event) => {
+  return async (event: LambdaEvent, context: Context) => {
     console.log('=== MCP Server Request Start (with Authentication) ===');
     console.log('Event:', JSON.stringify(event, null, 2));
 
@@ -97,7 +121,7 @@ export function createAuthenticatedHandler(originalHandler, authConfig) {
       }
 
       // Authentication successful, proceed with original handler
-      const response = await originalHandler(event);
+      const response = await originalHandler(event, context);
 
       console.log('=== MCP Server Request End ===');
       return response;

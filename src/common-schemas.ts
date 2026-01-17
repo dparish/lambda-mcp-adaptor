@@ -26,7 +26,7 @@ export const CommonSchemas = {
   uuid: z.string().uuid(),
 
   // Utility functions
-  enum: (values) => z.enum(values),
-  array: (itemSchema) => z.array(itemSchema),
-  object: (shape) => z.object(shape),
+  enum: <T extends readonly [string, ...string[]]>(values: T) => z.enum(values),
+  array: <T extends z.ZodTypeAny>(itemSchema: T) => z.array(itemSchema),
+  object: <T extends z.ZodRawShape>(shape: T) => z.object(shape),
 };

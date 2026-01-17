@@ -4,12 +4,38 @@
  * Handles Lambda integration and HTTP request/response processing
  */
 
-import { CORS_HEADERS, withBasicCORS } from './cors-config.mjs';
+import type {
+  JSONRPCNotification,
+  JSONRPCRequest,
+} from './mcp-spec.js';
+import type {
+  APIGatewayProxyEvent,
+  APIGatewayProxyEventV2,
+  APIGatewayProxyResult,
+  Context,
+} from 'aws-lambda';
+import type { AuthConfig } from './auth/index.js';
+import { CORS_HEADERS, withBasicCORS } from './cors-config.js';
+import type { MCPServer } from './mcp-server.js';
+
+type LambdaEvent = APIGatewayProxyEvent | APIGatewayProxyEventV2;
+type LambdaHandler = (
+  event: LambdaEvent,
+  context: Context
+) => Promise<APIGatewayProxyResult>;
+
+export interface LambdaHandlerOptions {
+  auth?: AuthConfig;
+}
 
 /**
  * Create HTTP response
  */
-export function createResponse(body, statusCode = 200, headers = {}) {
+export function createResponse(
+  body: unknown,
+  statusCode: number = 200,
+  headers: Record<string, string> = {}
+): APIGatewayProxyResult {
   return {
     statusCode,
     headers: {
@@ -24,12 +50,12 @@ export function createResponse(body, statusCode = 200, headers = {}) {
  * Create error response
  */
 export function createErrorResponse(
-  statusCode,
-  code,
-  message,
-  headers = {},
-  id = null
-) {
+  statusCode: number,
+  code: number,
+  message: string,
+  headers: Record<string, string> = {},
+  id: string | number | null = null
+): APIGatewayProxyResult {
   return createResponse(
     {
       jsonrpc: '2.0',
@@ -44,7 +70,12 @@ export function createErrorResponse(
 /**
  * Handle MCP request processing
  */
-export async function handleMCPRequest(mcpServer, body, headers, corsHeaders) {
+export async function handleMCPRequest(
+  mcpServer: MCPServer,
+  body: string | null | undefined,
+  headers: Record<string, string | undefined>,
+  corsHeaders: Record<string, string>
+): Promise<APIGatewayProxyResult> {
   const contentType = headers['content-type'] || headers['Content-Type'] || '';
   if (!contentType.includes('application/json')) {
     return createErrorResponse(
@@ -55,9 +86,9 @@ export async function handleMCPRequest(mcpServer, body, headers, corsHeaders) {
     );
   }
 
-  let jsonRpcMessage;
+  let jsonRpcMessage: JSONRPCRequest | JSONRPCNotification;
   try {
-    jsonRpcMessage = JSON.parse(body || '{}');
+    jsonRpcMessage = JSON.parse(body || '{}') as JSONRPCRequest | JSONRPCNotification;
   } catch {
     return createErrorResponse(
       400,
@@ -67,13 +98,15 @@ export async function handleMCPRequest(mcpServer, body, headers, corsHeaders) {
     );
   }
 
+  const responseId = 'id' in jsonRpcMessage ? jsonRpcMessage.id : null;
+
   if (!jsonRpcMessage.jsonrpc || jsonRpcMessage.jsonrpc !== '2.0') {
     return createErrorResponse(
       400,
       -32600,
       'Invalid Request: missing jsonrpc field',
       corsHeaders,
-      jsonRpcMessage.id
+      responseId
     );
   }
 
@@ -83,7 +116,7 @@ export async function handleMCPRequest(mcpServer, body, headers, corsHeaders) {
       -32600,
       'Invalid Request: missing method field',
       corsHeaders,
-      jsonRpcMessage.id
+      responseId
     );
   }
 
@@ -98,7 +131,7 @@ export async function handleMCPRequest(mcpServer, body, headers, corsHeaders) {
       {
         jsonrpc: '2.0',
         result,
-        id: jsonRpcMessage.id,
+        id: responseId,
       },
       200,
       corsHeaders
@@ -107,14 +140,11 @@ export async function handleMCPRequest(mcpServer, body, headers, corsHeaders) {
     console.error('MCP request error:', error);
 
     let errorCode = -32603; // Internal error
-    let errorMessage = error.message;
+    let errorMessage = error instanceof Error ? error.message : String(error);
 
-    if (error.message.includes('Method not found')) {
+    if (errorMessage.includes('Method not found')) {
       errorCode = -32601;
-    } else if (
-      error.message.includes('not found') ||
-      error.message.includes('required')
-    ) {
+    } else if (errorMessage.includes('not found') || errorMessage.includes('required')) {
       errorCode = -32602; // Invalid params
     }
 
@@ -123,7 +153,7 @@ export async function handleMCPRequest(mcpServer, body, headers, corsHeaders) {
       errorCode,
       errorMessage,
       corsHeaders,
-      jsonRpcMessage.id
+      responseId
     );
   }
 }
@@ -131,10 +161,14 @@ export async function handleMCPRequest(mcpServer, body, headers, corsHeaders) {
 /**
  * AWS Lambda Adapter for MCP Server
  */
-export function createLambdaHandler(mcpServer, options = {}) {
-  const baseHandler = async (event) => {
+export function createLambdaHandler(
+  mcpServer: MCPServer,
+  options: LambdaHandlerOptions = {}
+): LambdaHandler {
+  const baseHandler: LambdaHandler = async (event) => {
     try {
-      const method = event.httpMethod || event.requestContext?.http?.method;
+      const method =
+        'httpMethod' in event ? event.httpMethod : event.requestContext?.http?.method;
       const headers = event.headers || {};
 
       if (method === 'OPTIONS') {
@@ -178,14 +212,15 @@ export function createLambdaHandler(mcpServer, options = {}) {
 
   // If authentication is configured, wrap with authentication middleware
   if (options.auth) {
-    return async (event, context) => {
+    const authConfig = options.auth;
+    return async (event: LambdaEvent, context: Context) => {
       try {
         const { createAuthenticatedHandler } = await import(
-          './auth/middleware.mjs'
+          './auth/middleware.js'
         );
         const authenticatedHandler = createAuthenticatedHandler(
           baseHandler,
-          options.auth
+          authConfig
         );
         return await authenticatedHandler(event, context);
       } catch (error) {

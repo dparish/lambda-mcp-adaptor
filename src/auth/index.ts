@@ -4,16 +4,47 @@
  * Provides authentication functionality for MCP servers
  */
 
+import type {
+  APIGatewayProxyEvent,
+  APIGatewayProxyEventV2,
+  APIGatewayProxyResult,
+} from 'aws-lambda';
+
+export type LambdaEvent = APIGatewayProxyEvent | APIGatewayProxyEventV2;
+
+export interface AuthUser {
+  token?: string;
+  [key: string]: unknown;
+}
+
+export interface AuthValidationResult {
+  isValid: boolean;
+  user?: AuthUser;
+  token?: string;
+  error?: APIGatewayProxyResult;
+}
+
+export interface BearerTokenAuthConfig {
+  type: 'bearer-token';
+  tokens?: string[];
+  validate?: (
+    token: string,
+    event: LambdaEvent
+  ) => AuthValidationResult | Promise<AuthValidationResult>;
+}
+
+export type AuthConfig = BearerTokenAuthConfig;
+
 export {
   validateBearerToken,
   createBearerTokenConfigFromEnv,
   createBearerTokenConfigWithValidation,
-} from './bearer-token.mjs';
+} from './bearer-token.js';
 
 export {
   createAuthMiddleware,
   createAuthenticatedHandler,
-} from './middleware.mjs';
+} from './middleware.js';
 
 /**
  * Authentication configuration presets
@@ -24,7 +55,7 @@ export const AuthPresets = {
    * @param {string} envVar - Environment variable name (default: 'VALID_TOKENS')
    * @returns {Object} Authentication configuration
    */
-  bearerTokenFromEnv: (envVar = 'VALID_TOKENS') => ({
+  bearerTokenFromEnv: (envVar = 'VALID_TOKENS'): BearerTokenAuthConfig => ({
     type: 'bearer-token',
     tokens: (process.env[envVar] || '').split(',').filter((t) => t.trim()),
   }),
@@ -34,7 +65,7 @@ export const AuthPresets = {
    * @param {string[]} tokens - Array of valid tokens
    * @returns {Object} Authentication configuration
    */
-  bearerTokenWithList: (tokens) => ({
+  bearerTokenWithList: (tokens: string | string[]): BearerTokenAuthConfig => ({
     type: 'bearer-token',
     tokens: Array.isArray(tokens) ? tokens : [tokens],
   }),
@@ -44,7 +75,9 @@ export const AuthPresets = {
    * @param {Function} validateFn - Custom validation function
    * @returns {Object} Authentication configuration
    */
-  bearerTokenWithValidation: (validateFn) => ({
+  bearerTokenWithValidation: (
+    validateFn: BearerTokenAuthConfig['validate']
+  ): BearerTokenAuthConfig => ({
     type: 'bearer-token',
     validate: validateFn,
   }),
@@ -63,18 +96,21 @@ export const Auth = {
    * Bearer token authentication from environment variable
    * @param {string} envVar - Environment variable name
    */
-  bearerToken: (envVar = 'VALID_TOKENS') =>
+  bearerToken: (envVar = 'VALID_TOKENS'): BearerTokenAuthConfig =>
     AuthPresets.bearerTokenFromEnv(envVar),
 
   /**
    * Bearer token authentication with token list
    * @param {string|string[]} tokens - Token or array of tokens
    */
-  bearerTokens: (tokens) => AuthPresets.bearerTokenWithList(tokens),
+  bearerTokens: (tokens: string | string[]): BearerTokenAuthConfig =>
+    AuthPresets.bearerTokenWithList(tokens),
 
   /**
    * Custom bearer token validation
    * @param {Function} validateFn - Validation function
    */
-  custom: (validateFn) => AuthPresets.bearerTokenWithValidation(validateFn),
+  custom: (
+    validateFn: BearerTokenAuthConfig['validate']
+  ): BearerTokenAuthConfig => AuthPresets.bearerTokenWithValidation(validateFn),
 };
