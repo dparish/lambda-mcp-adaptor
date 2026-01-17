@@ -2,15 +2,15 @@
  * Basic tests for lambda-mcp-adaptor
  */
 
-import { expect } from 'chai';
+import { beforeEach, describe, expect, it } from 'vitest';
 import { createMCPServer, createLambdaHandler } from '../src/index.js';
 import { z } from 'zod';
 import type { MCPServer } from '../src/mcp-server.js';
 
-describe('lambda-mcp-adaptor', function() {
+describe('lambda-mcp-adaptor', () => {
   let server: MCPServer;
   
-  beforeEach(function() {
+  beforeEach(() => {
     server = createMCPServer({
       name: 'Test Server',
       version: '1.0.0',
@@ -18,25 +18,25 @@ describe('lambda-mcp-adaptor', function() {
     });
   });
   
-  describe('MCPServer', function() {
-    it('should create server with correct config', function() {
-      expect(server.config.name).to.equal('Test Server');
-      expect(server.config.version).to.equal('1.0.0');
-      expect(server.config.protocolVersion).to.equal('2025-03-26');
+  describe('MCPServer', () => {
+    it('should create server with correct config', () => {
+      expect(server.config.name).toBe('Test Server');
+      expect(server.config.version).toBe('1.0.0');
+      expect(server.config.protocolVersion).toBe('2025-03-26');
     });
     
-    it('should register tools with method chaining', function() {
+    it('should register tools with method chaining', () => {
       const result = server
         .tool('test1', { input: z.string() }, async ({ input }) => ({ content: [{ type: 'text', text: input }] }))
         .tool('test2', { value: z.number() }, async ({ value }) => ({ content: [{ type: 'text', text: value.toString() }] }));
       
-      expect(result).to.equal(server);
-      expect(server.tools.size).to.equal(2);
-      expect(server.tools.has('test1')).to.be.true;
-      expect(server.tools.has('test2')).to.be.true;
+      expect(result).toBe(server);
+      expect(server.tools.size).toBe(2);
+      expect(server.tools.has('test1')).toBe(true);
+      expect(server.tools.has('test2')).toBe(true);
     });
     
-    it('should handle initialize request', async function() {
+    it('should handle initialize request', async () => {
       server.tool('test', { input: z.string() }, async ({ input }) => ({ content: [{ type: 'text', text: input }] }));
       
       const result = await server.handleRequest({
@@ -50,12 +50,12 @@ describe('lambda-mcp-adaptor', function() {
         }
       });
       
-      expect(result.protocolVersion).to.equal('2025-03-26');
-      expect(result.serverInfo.name).to.equal('Test Server');
-      expect(result.capabilities.tools).to.deep.equal({ listChanged: true });
+      expect(result.protocolVersion).toBe('2025-03-26');
+      expect(result.serverInfo.name).toBe('Test Server');
+      expect(result.capabilities.tools).toEqual({ listChanged: true });
     });
     
-    it('should handle tools/list request', async function() {
+    it('should handle tools/list request', async () => {
       server.tool('calculate', {
         a: z.number(),
         b: z.number()
@@ -67,15 +67,15 @@ describe('lambda-mcp-adaptor', function() {
         method: 'tools/list'
       });
       
-      expect(result.tools).to.be.an('array');
-      expect(result.tools).to.have.length(1);
-      expect(result.tools[0].name).to.equal('calculate');
-      expect(result.tools[0].inputSchema.type).to.equal('object');
-      expect(result.tools[0].inputSchema.properties).to.have.property('a');
-      expect(result.tools[0].inputSchema.properties).to.have.property('b');
+      expect(Array.isArray(result.tools)).toBe(true);
+      expect(result.tools).toHaveLength(1);
+      expect(result.tools[0].name).toBe('calculate');
+      expect(result.tools[0].inputSchema.type).toBe('object');
+      expect(result.tools[0].inputSchema.properties).toHaveProperty('a');
+      expect(result.tools[0].inputSchema.properties).toHaveProperty('b');
     });
     
-    it('should handle tools/call request with validation', async function() {
+    it('should handle tools/call request with validation', async () => {
       server.tool('add', {
         a: z.number(),
         b: z.number()
@@ -91,11 +91,11 @@ describe('lambda-mcp-adaptor', function() {
         }
       });
       
-      expect(result.content).to.be.an('array');
-      expect(result.content[0].text).to.equal('5 + 3 = 8');
+      expect(Array.isArray(result.content)).toBe(true);
+      expect(result.content[0].text).toBe('5 + 3 = 8');
     });
     
-    it('should validate tool arguments with Zod', async function() {
+    it('should validate tool arguments with Zod', async () => {
       server.tool('validate_test', {
         email: z.string().email(),
         age: z.number().int().positive()
@@ -112,7 +112,7 @@ describe('lambda-mcp-adaptor', function() {
         }
       });
       
-      expect(validResult.content[0].text).to.equal('test@example.com: 25');
+      expect(validResult.content[0].text).toBe('test@example.com: 25');
       
       // Invalid arguments should return error response
       const errorResult = await server.handleRequest({
@@ -125,11 +125,11 @@ describe('lambda-mcp-adaptor', function() {
         }
       });
       
-      expect(errorResult.isError).to.be.true;
-      expect(errorResult.content[0].text).to.include('Validation error');
+      expect(errorResult.isError).toBe(true);
+      expect(errorResult.content[0].text).toContain('Validation error');
     });
     
-    it('should handle optional parameters with defaults', async function() {
+    it('should handle optional parameters with defaults', async () => {
       server.tool('optional_test', {
         required: z.string(),
         optional: z.string().optional(),
@@ -148,10 +148,10 @@ describe('lambda-mcp-adaptor', function() {
         }
       });
       
-      expect(result.content[0].text).to.equal('test, none, 42');
+      expect(result.content[0].text).toBe('test, none, 42');
     });
     
-    it('should handle enum validation', async function() {
+    it('should handle enum validation', async () => {
       server.tool('enum_test', {
         operation: z.enum(['add', 'subtract', 'multiply'])
       }, async ({ operation }) => ({ content: [{ type: 'text', text: operation }] }));
@@ -167,7 +167,7 @@ describe('lambda-mcp-adaptor', function() {
         }
       });
       
-      expect(validResult.content[0].text).to.equal('add');
+      expect(validResult.content[0].text).toBe('add');
       
       // Invalid enum value should return error response
       const enumErrorResult = await server.handleRequest({
@@ -180,11 +180,11 @@ describe('lambda-mcp-adaptor', function() {
         }
       });
       
-      expect(enumErrorResult.isError).to.be.true;
-      expect(enumErrorResult.content[0].text).to.include('Validation error');
+      expect(enumErrorResult.isError).toBe(true);
+      expect(enumErrorResult.content[0].text).toContain('Validation error');
     });
     
-    it('should register and handle resources', async function() {
+    it('should register and handle resources', async () => {
       server.resource('test-resource', 'test://resource', async (uri) => ({
         contents: [{ uri, text: 'Resource content', mimeType: 'text/plain' }]
       }));
@@ -195,8 +195,8 @@ describe('lambda-mcp-adaptor', function() {
         method: 'resources/list'
       });
       
-      expect(listResult.resources).to.have.length(1);
-      expect(listResult.resources[0].name).to.equal('test-resource');
+      expect(listResult.resources).toHaveLength(1);
+      expect(listResult.resources[0].name).toBe('test-resource');
       
       const readResult = await server.handleRequest({
         jsonrpc: '2.0',
@@ -205,10 +205,10 @@ describe('lambda-mcp-adaptor', function() {
         params: { uri: 'test://resource' }
       });
       
-      expect(readResult.contents[0].text).to.equal('Resource content');
+      expect(readResult.contents[0].text).toBe('Resource content');
     });
     
-    it('should register and handle prompts', async function() {
+    it('should register and handle prompts', async () => {
       server.prompt('test-prompt', {
         input: z.string(),
         context: z.string().optional()
@@ -225,8 +225,8 @@ describe('lambda-mcp-adaptor', function() {
         method: 'prompts/list'
       });
       
-      expect(listResult.prompts).to.have.length(1);
-      expect(listResult.prompts[0].name).to.equal('test-prompt');
+      expect(listResult.prompts).toHaveLength(1);
+      expect(listResult.prompts[0].name).toBe('test-prompt');
       
       const getResult = await server.handleRequest({
         jsonrpc: '2.0',
@@ -238,17 +238,17 @@ describe('lambda-mcp-adaptor', function() {
         }
       });
       
-      expect(getResult.messages[0].content.text).to.equal('Process: test input (test context)');
+      expect(getResult.messages[0].content.text).toBe('Process: test input (test context)');
     });
   });
   
-  describe('Lambda Handler', function() {
-    it('should create Lambda handler', function() {
+  describe('Lambda Handler', () => {
+    it('should create Lambda handler', () => {
       const handler = createLambdaHandler(server);
-      expect(handler).to.be.a('function');
+      expect(handler).toBeTypeOf('function');
     });
     
-    it('should handle OPTIONS request (CORS)', async function() {
+    it('should handle OPTIONS request (CORS)', async () => {
       const handler = createLambdaHandler(server);
       
       const result = await handler({
@@ -256,12 +256,12 @@ describe('lambda-mcp-adaptor', function() {
         headers: {}
       });
       
-      expect(result.statusCode).to.equal(200);
-      expect(result.headers['Access-Control-Allow-Origin']).to.equal('*');
-      expect(result.headers['Access-Control-Allow-Methods']).to.include('POST');
+      expect(result.statusCode).toBe(200);
+      expect(result.headers['Access-Control-Allow-Origin']).toBe('*');
+      expect(result.headers['Access-Control-Allow-Methods']).toContain('POST');
     });
     
-    it('should handle POST request with MCP message', async function() {
+    it('should handle POST request with MCP message', async () => {
       server.tool('test', { input: z.string() }, async ({ input }) => ({ content: [{ type: 'text', text: input }] }));
       
       const handler = createLambdaHandler(server);
@@ -276,16 +276,16 @@ describe('lambda-mcp-adaptor', function() {
         })
       });
       
-      expect(result.statusCode).to.equal(200);
-      expect(result.headers['Content-Type']).to.equal('application/json');
+      expect(result.statusCode).toBe(200);
+      expect(result.headers['Content-Type']).toBe('application/json');
       
       const response = JSON.parse(result.body);
-      expect(response.jsonrpc).to.equal('2.0');
-      expect(response.id).to.equal(1);
-      expect(response.result.tools).to.be.an('array');
+      expect(response.jsonrpc).toBe('2.0');
+      expect(response.id).toBe(1);
+      expect(Array.isArray(response.result.tools)).toBe(true);
     });
     
-    it('should handle invalid JSON', async function() {
+    it('should handle invalid JSON', async () => {
       const handler = createLambdaHandler(server);
       
       const result = await handler({
@@ -294,14 +294,14 @@ describe('lambda-mcp-adaptor', function() {
         body: 'invalid json'
       });
       
-      expect(result.statusCode).to.equal(400);
+      expect(result.statusCode).toBe(400);
       
       const response = JSON.parse(result.body);
-      expect(response.error.code).to.equal(-32700);
-      expect(response.error.message).to.include('Parse error');
+      expect(response.error.code).toBe(-32700);
+      expect(response.error.message).toContain('Parse error');
     });
     
-    it('should handle missing Content-Type', async function() {
+    it('should handle missing Content-Type', async () => {
       const handler = createLambdaHandler(server);
       
       const result = await handler({
@@ -310,14 +310,14 @@ describe('lambda-mcp-adaptor', function() {
         body: '{}'
       });
       
-      expect(result.statusCode).to.equal(400);
+      expect(result.statusCode).toBe(400);
       
       const response = JSON.parse(result.body);
-      expect(response.error.code).to.equal(-32700);
-      expect(response.error.message).to.include('Content-Type');
+      expect(response.error.code).toBe(-32700);
+      expect(response.error.message).toContain('Content-Type');
     });
     
-    it('should handle GET request (not allowed)', async function() {
+    it('should handle GET request (not allowed)', async () => {
       const handler = createLambdaHandler(server);
       
       const result = await handler({
@@ -325,11 +325,11 @@ describe('lambda-mcp-adaptor', function() {
         headers: {}
       });
       
-      expect(result.statusCode).to.equal(405);
+      expect(result.statusCode).toBe(405);
       
       const response = JSON.parse(result.body);
-      expect(response.error.code).to.equal(-32000);
-      expect(response.error.message).to.include('Method not allowed');
+      expect(response.error.code).toBe(-32000);
+      expect(response.error.message).toContain('Method not allowed');
     });
   });
 });
