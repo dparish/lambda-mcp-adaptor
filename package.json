@@ -2,13 +2,13 @@
   "name": "lambda-mcp-adaptor",
   "version": "1.0.0",
   "description": "An MCP (Model Context Protocol) server SDK for AWS serverless architecture with official SDK-like API design",
-  "main": "dist/index.js",
+  "main": "dist/index.cjs",
   "module": "dist/index.mjs",
-  "types": "dist/index.d.ts",
+  "types": "dist/index.d.mts",
   "exports": {
     ".": {
       "import": "./dist/index.mjs",
-      "require": "./dist/index.js",
+      "require": "./dist/index.cjs",
       "types": "./dist/index.d.ts"
     }
   },
@@ -18,7 +18,7 @@
     "LICENSE"
   ],
   "scripts": {
-    "build": "npm run build:esm && npm run build:cjs && npm run build:types",
+    "build": "tsdown",
     "build:esm": "esbuild src/index.ts --bundle --platform=node --target=node18 --format=esm --outfile=dist/index.mjs --external:zod",
     "build:cjs": "esbuild src/index.ts --bundle --platform=node --target=node18 --format=cjs --outfile=dist/index.js --external:zod",
     "build:types": "tsc -p tsconfig.json && cp src/mcp-spec.d.ts dist/mcp-spec.d.ts",
@@ -67,6 +67,7 @@
     "globals": "^16.2.0",
     "json-schema": "^0.4.0",
     "prettier": "^3.5.3",
+    "tsdown": "^0.20.0-beta.3",
     "typescript": "^5.6.3",
     "typescript-eslint": "^8.34.0",
     "vitest": "^2.1.8",

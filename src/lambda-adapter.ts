@@ -140,7 +140,7 @@ export async function handleMCPRequest(
     console.error('MCP request error:', error);
 
     let errorCode = -32603; // Internal error
-    let errorMessage = error instanceof Error ? error.message : String(error);
+    const errorMessage = error instanceof Error ? error.message : String(error);
 
     if (errorMessage.includes('Method not found')) {
       errorCode = -32601;

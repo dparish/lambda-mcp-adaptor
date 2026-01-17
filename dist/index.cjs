@@ -1,5 +1,5 @@
-import { n as withBasicCORS, t as CORS_HEADERS } from "./cors-config-C27FWWLN.mjs";
-import { z } from "zod";
+const require_cors_config = require('./cors-config-HN36M-Ox.cjs');
+let zod = require("zod");
 
 //#region src/schema-utils.ts
 /**
@@ -27,17 +27,17 @@ function zodToJsonSchema(zodSchema) {
 * Convert individual Zod type to JSON Schema
 */
 function convertZodTypeToJsonSchema(zodType) {
-	if (zodType instanceof z.ZodOptional) {
+	if (zodType instanceof zod.z.ZodOptional) {
 		const def = zodType._def;
 		return convertZodTypeToJsonSchema(def.innerType);
 	}
-	if (zodType instanceof z.ZodDefault) {
+	if (zodType instanceof zod.z.ZodDefault) {
 		const def = zodType._def;
 		const schema = convertZodTypeToJsonSchema(def.innerType);
 		schema.default = def.defaultValue();
 		return schema;
 	}
-	if (zodType instanceof z.ZodString) {
+	if (zodType instanceof zod.z.ZodString) {
 		const schema = { type: "string" };
 		const def = zodType._def;
 		if (def.checks) for (const check of def.checks) switch (check.kind) {
@@ -60,7 +60,7 @@ function convertZodTypeToJsonSchema(zodType) {
 		if (zodType.description) schema.description = zodType.description;
 		return schema;
 	}
-	if (zodType instanceof z.ZodNumber) {
+	if (zodType instanceof zod.z.ZodNumber) {
 		const schema = { type: "number" };
 		const def = zodType._def;
 		if (def.checks) for (const check of def.checks) switch (check.kind) {
@@ -77,12 +77,12 @@ function convertZodTypeToJsonSchema(zodType) {
 		if (zodType.description) schema.description = zodType.description;
 		return schema;
 	}
-	if (zodType instanceof z.ZodBoolean) {
+	if (zodType instanceof zod.z.ZodBoolean) {
 		const schema = { type: "boolean" };
 		if (zodType.description) schema.description = zodType.description;
 		return schema;
 	}
-	if (zodType instanceof z.ZodEnum) {
+	if (zodType instanceof zod.z.ZodEnum) {
 		const schema = {
 			type: "string",
 			enum: zodType._def.values
@@ -90,7 +90,7 @@ function convertZodTypeToJsonSchema(zodType) {
 		if (zodType.description) schema.description = zodType.description;
 		return schema;
 	}
-	if (zodType instanceof z.ZodArray) {
+	if (zodType instanceof zod.z.ZodArray) {
 		const schema = {
 			type: "array",
 			items: convertZodTypeToJsonSchema(zodType._def.type)
@@ -100,7 +100,7 @@ function convertZodTypeToJsonSchema(zodType) {
 		if (zodType.description) schema.description = zodType.description;
 		return schema;
 	}
-	if (zodType instanceof z.ZodObject) return zodToJsonSchema(zodType.shape);
+	if (zodType instanceof zod.z.ZodObject) return zodToJsonSchema(zodType.shape);
 	return {
 		type: "string",
 		description: zodType.description || "Unknown type"
@@ -110,13 +110,13 @@ function convertZodTypeToJsonSchema(zodType) {
 * Check if Zod type is optional
 */
 function isZodOptional(zodType) {
-	return zodType instanceof z.ZodOptional || zodType instanceof z.ZodDefault;
+	return zodType instanceof zod.z.ZodOptional || zodType instanceof zod.z.ZodDefault;
 }
 /**
 * Check if Zod type has default value
 */
 function hasZodDefault(zodType) {
-	return zodType instanceof z.ZodDefault;
+	return zodType instanceof zod.z.ZodDefault;
 }
 /**
 * Validate arguments with Zod schema
@@ -130,7 +130,7 @@ function validateWithZod(zodSchema, args) {
 		}
 		validated[key] = schema.parse(args[key]);
 	} catch (error) {
-		throw new z.ZodError([{
+		throw new zod.z.ZodError([{
 			code: "custom",
 			path: [key],
 			message: error instanceof Error ? error.message : String(error)
@@ -177,7 +177,7 @@ var MCPServer = class {
 			try {
 				return await handler(validateWithZod(inputSchema, args));
 			} catch (error) {
-				if (error instanceof z.ZodError) throw new Error(`Validation error: ${error.errors.map((e) => `${e.path.join(".")}: ${e.message}`).join(", ")}`);
+				if (error instanceof zod.z.ZodError) throw new Error(`Validation error: ${error.errors.map((e) => `${e.path.join(".")}: ${e.message}`).join(", ")}`);
 				throw error;
 			}
 		};
@@ -212,7 +212,7 @@ var MCPServer = class {
 			try {
 				return await handler(validateWithZod(inputSchema, args));
 			} catch (error) {
-				if (error instanceof z.ZodError) throw new Error(`Validation error: ${error.errors.map((e) => `${e.path.join(".")}: ${e.message}`).join(", ")}`);
+				if (error instanceof zod.z.ZodError) throw new Error(`Validation error: ${error.errors.map((e) => `${e.path.join(".")}: ${e.message}`).join(", ")}`);
 				throw error;
 			}
 		};
@@ -419,26 +419,26 @@ function createLambdaHandler(mcpServer, options = {}) {
 		try {
 			const method = "httpMethod" in event ? event.httpMethod : event.requestContext?.http?.method;
 			const headers = event.headers || {};
-			if (method === "OPTIONS") return createResponse("", 200, CORS_HEADERS);
-			if (method === "POST") return await handleMCPRequest(mcpServer, event.body, headers, CORS_HEADERS);
-			if (method === "GET") return createErrorResponse(405, -32e3, "Method not allowed: Stateless mode", CORS_HEADERS);
-			return createErrorResponse(405, -32e3, `Method not allowed: ${method}`, CORS_HEADERS);
+			if (method === "OPTIONS") return createResponse("", 200, require_cors_config.CORS_HEADERS);
+			if (method === "POST") return await handleMCPRequest(mcpServer, event.body, headers, require_cors_config.CORS_HEADERS);
+			if (method === "GET") return createErrorResponse(405, -32e3, "Method not allowed: Stateless mode", require_cors_config.CORS_HEADERS);
+			return createErrorResponse(405, -32e3, `Method not allowed: ${method}`, require_cors_config.CORS_HEADERS);
 		} catch (error) {
 			console.error("Lambda error:", error);
-			return createErrorResponse(500, -32603, "Internal server error", withBasicCORS({ "Content-Type": "application/json" }));
+			return createErrorResponse(500, -32603, "Internal server error", require_cors_config.withBasicCORS({ "Content-Type": "application/json" }));
 		}
 	};
 	if (options.auth) {
 		const authConfig = options.auth;
 		return async (event, context) => {
 			try {
-				const { createAuthenticatedHandler } = await import("./middleware-DTiONAQk.mjs");
+				const { createAuthenticatedHandler } = await Promise.resolve().then(() => require("./middleware-BZkZMXHu.cjs"));
 				return await createAuthenticatedHandler(baseHandler, authConfig)(event, context);
 			} catch (error) {
 				console.error("Authentication module error:", error);
 				return {
 					statusCode: 500,
-					headers: withBasicCORS({ "Content-Type": "application/json" }),
+					headers: require_cors_config.withBasicCORS({ "Content-Type": "application/json" }),
 					body: JSON.stringify({
 						error: "server_error",
 						message: "Authentication module not available"
@@ -461,18 +461,18 @@ function createLambdaHandler(mcpServer, options = {}) {
 * Common schema patterns for MCP tools
 */
 const CommonSchemas = {
-	string: z.string(),
-	number: z.number(),
-	boolean: z.boolean(),
-	optionalString: z.string().optional(),
-	optionalNumber: z.number().optional(),
-	optionalBoolean: z.boolean().optional(),
-	email: z.string().email(),
-	url: z.string().url(),
-	uuid: z.string().uuid(),
-	enum: (values) => z.enum(values),
-	array: (itemSchema) => z.array(itemSchema),
-	object: (shape) => z.object(shape)
+	string: zod.z.string(),
+	number: zod.z.number(),
+	boolean: zod.z.boolean(),
+	optionalString: zod.z.string().optional(),
+	optionalNumber: zod.z.number().optional(),
+	optionalBoolean: zod.z.boolean().optional(),
+	email: zod.z.string().email(),
+	url: zod.z.string().url(),
+	uuid: zod.z.string().uuid(),
+	enum: (values) => zod.z.enum(values),
+	array: (itemSchema) => zod.z.array(itemSchema),
+	object: (shape) => zod.z.object(shape)
 };
 
 //#endregion
@@ -488,4 +488,7 @@ function createMCPServer(config) {
 }
 
 //#endregion
-export { CommonSchemas, MCPServer, createLambdaHandler, createMCPServer };
+exports.CommonSchemas = CommonSchemas;
+exports.MCPServer = MCPServer;
+exports.createLambdaHandler = createLambdaHandler;
+exports.createMCPServer = createMCPServer;
