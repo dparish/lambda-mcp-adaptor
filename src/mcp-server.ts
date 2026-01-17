@@ -11,15 +11,23 @@ import type {
   GetPromptRequestParams,
   GetPromptResult,
   InitializeResult,
+  InitializeRequest,
+  InitializedNotification,
   JSONRPCNotification,
   JSONRPCRequest,
+  ListPromptsRequest,
   ListPromptsResult,
+  ListResourcesRequest,
   ListResourcesResult,
+  ListToolsRequest,
   ListToolsResult,
   PromptArgument,
+  ReadResourceRequest,
   ReadResourceRequestParams,
   ReadResourceResult,
   Tool,
+  CallToolRequest,
+  GetPromptRequest,
 } from './mcp-spec';
 import {
   zodToJsonSchema,
@@ -70,6 +78,19 @@ type PromptRegistration = {
   arguments: PromptArgument[];
   handler: (args: Record<string, unknown>) => Promise<GetPromptResult>;
 };
+
+type HandleRequestMethodMap = {
+  initialize: InitializeResult;
+  'notifications/initialized': null;
+  'tools/list': ListToolsResult;
+  'tools/call': CallToolResult;
+  'resources/list': ListResourcesResult;
+  'resources/read': ReadResourceResult;
+  'prompts/list': ListPromptsResult;
+  'prompts/get': GetPromptResult;
+};
+
+type HandleRequestResultUnion = HandleRequestMethodMap[keyof HandleRequestMethodMap];
 
 /**
  * Main MCP Server class with Zod-based type safety
@@ -187,18 +208,17 @@ export class MCPServer {
   /**
    * Handle MCP protocol requests
    */
+  async handleRequest(request: InitializeRequest): Promise<InitializeResult>;
+  async handleRequest(request: InitializedNotification): Promise<null>;
+  async handleRequest(request: ListToolsRequest): Promise<ListToolsResult>;
+  async handleRequest(request: CallToolRequest): Promise<CallToolResult>;
+  async handleRequest(request: ListResourcesRequest): Promise<ListResourcesResult>;
+  async handleRequest(request: ReadResourceRequest): Promise<ReadResourceResult>;
+  async handleRequest(request: ListPromptsRequest): Promise<ListPromptsResult>;
+  async handleRequest(request: GetPromptRequest): Promise<GetPromptResult>;
   async handleRequest(
     request: JSONRPCRequest | JSONRPCNotification
-  ): Promise<
-    | InitializeResult
-    | ListToolsResult
-    | CallToolResult
-    | ListResourcesResult
-    | ReadResourceResult
-    | ListPromptsResult
-    | GetPromptResult
-    | null
-  > {
+  ): Promise<HandleRequestResultUnion> {
     switch (request.method) {
       case 'initialize':
         return this.handleInitialize();

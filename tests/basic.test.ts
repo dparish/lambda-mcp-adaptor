@@ -6,7 +6,6 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { createMCPServer, createLambdaHandler } from '../src';
 import { z } from 'zod';
 import type { MCPServer } from '../src';
-import { InitializeResult } from '../src/mcp-spec';
 
 describe('lambda-mcp-adaptor', () => {
   let server: MCPServer;
