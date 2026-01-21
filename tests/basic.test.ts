@@ -6,6 +6,33 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { createMCPServer, createLambdaHandler } from '../src';
 import { z } from 'zod';
 import type { MCPServer } from '../src';
+import type { Context } from 'aws-lambda';
+import type {
+  BlobResourceContents,
+  ContentBlock,
+  TextContent,
+  TextResourceContents,
+} from '../src/mcp-spec';
+
+type LambdaEvent = Parameters<ReturnType<typeof createLambdaHandler>>[0];
+
+function asLambdaEvent(event: Partial<LambdaEvent>): LambdaEvent {
+  return event as LambdaEvent;
+}
+
+function assertTextContent(block: ContentBlock): asserts block is TextContent {
+  if (block.type !== 'text') {
+    throw new Error(`Expected text content, got ${block.type}`);
+  }
+}
+
+function assertTextResourceContents(
+  content: TextResourceContents | BlobResourceContents
+): asserts content is TextResourceContents {
+  if (!('text' in content)) {
+    throw new Error('Expected text resource contents');
+  }
+}
 
 describe('lambda-mcp-adaptor', () => {
   let server: MCPServer;
@@ -100,6 +127,7 @@ describe('lambda-mcp-adaptor', () => {
         throw new Error('Unexpected error');
       }
       expect(Array.isArray(result.content)).toBe(true);
+      assertTextContent(result.content[0]);
       expect(result.content[0].text).toBe('5 + 3 = 8');
     });
 
@@ -123,6 +151,7 @@ describe('lambda-mcp-adaptor', () => {
       if (!validResult) {
         throw new Error('Unexpected error');
       }
+      assertTextContent(validResult.content[0]);
       expect(validResult.content[0].text).toBe('test@example.com: 25');
 
       // Invalid arguments should return error response
@@ -140,6 +169,7 @@ describe('lambda-mcp-adaptor', () => {
         throw new Error('Unexpected error');
       }
       expect(errorResult.isError).toBe(true);
+      assertTextContent(errorResult.content[0]);
       expect(errorResult.content[0].text).toContain('Validation error');
     });
 
@@ -166,6 +196,7 @@ describe('lambda-mcp-adaptor', () => {
         throw new Error('Unexpected error');
       }
 
+      assertTextContent(result.content[0]);
       expect(result.content[0].text).toBe('test, none, 42');
     });
 
@@ -189,6 +220,7 @@ describe('lambda-mcp-adaptor', () => {
         throw new Error('Unexpected error');
       }
 
+      assertTextContent(validResult.content[0]);
       expect(validResult.content[0].text).toBe('add');
 
       // Invalid enum value should return error response
@@ -206,6 +238,7 @@ describe('lambda-mcp-adaptor', () => {
         throw new Error('Unexpected error');
       }
       expect(enumErrorResult.isError).toBe(true);
+      assertTextContent(enumErrorResult.content[0]);
       expect(enumErrorResult.content[0].text).toContain('Validation error');
     });
 
@@ -236,6 +269,7 @@ describe('lambda-mcp-adaptor', () => {
       if(!readResult) {
         throw new Error('Unexpected error');
       }
+      assertTextResourceContents(readResult.contents[0]);
       expect(readResult.contents[0].text).toBe('Resource content');
     });
 
@@ -276,11 +310,14 @@ describe('lambda-mcp-adaptor', () => {
       if (!getResult) {
         throw new Error('Unexpected error');
       }
+      assertTextContent(getResult.messages[0].content);
       expect(getResult.messages[0].content.text).toBe('Process: test input (test context)');
     });
   });
 
   describe('Lambda Handler', () => {
+    const context = {} as Context;
+
     it('should create Lambda handler', () => {
       const handler = createLambdaHandler(server);
       expect(handler).toBeTypeOf('function');
@@ -289,14 +326,15 @@ describe('lambda-mcp-adaptor', () => {
     it('should handle OPTIONS request (CORS)', async () => {
       const handler = createLambdaHandler(server);
 
-      const result = await handler({
+      const result = await handler(asLambdaEvent({
         httpMethod: 'OPTIONS',
         headers: {}
-      });
+      }), context);
 
       expect(result.statusCode).toBe(200);
-      expect(result.headers['Access-Control-Allow-Origin']).toBe('*');
-      expect(result.headers['Access-Control-Allow-Methods']).toContain('POST');
+      const headers = result.headers ?? {};
+      expect(headers['Access-Control-Allow-Origin']).toBe('*');
+      expect(headers['Access-Control-Allow-Methods']).toContain('POST');
     });
 
     it('should handle POST request with MCP message', async () => {
@@ -304,7 +342,7 @@ describe('lambda-mcp-adaptor', () => {
 
       const handler = createLambdaHandler(server);
 
-      const result = await handler({
+      const result = await handler(asLambdaEvent({
         httpMethod: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -312,10 +350,11 @@ describe('lambda-mcp-adaptor', () => {
           id: 1,
           method: 'tools/list'
         })
-      });
+      }), context);
 
       expect(result.statusCode).toBe(200);
-      expect(result.headers['Content-Type']).toBe('application/json');
+      const headers = result.headers ?? {};
+      expect(headers['Content-Type']).toBe('application/json');
 
       const response = JSON.parse(result.body);
       expect(response.jsonrpc).toBe('2.0');
@@ -326,11 +365,11 @@ describe('lambda-mcp-adaptor', () => {
     it('should handle invalid JSON', async () => {
       const handler = createLambdaHandler(server);
 
-      const result = await handler({
+      const result = await handler(asLambdaEvent({
         httpMethod: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: 'invalid json'
-      });
+      }), context);
 
       expect(result.statusCode).toBe(400);
 
@@ -342,11 +381,11 @@ describe('lambda-mcp-adaptor', () => {
     it('should handle missing Content-Type', async () => {
       const handler = createLambdaHandler(server);
 
-      const result = await handler({
+      const result = await handler(asLambdaEvent({
         httpMethod: 'POST',
         headers: {},
         body: '{}'
-      });
+      }), context);
 
       expect(result.statusCode).toBe(400);
 
@@ -358,10 +397,10 @@ describe('lambda-mcp-adaptor', () => {
     it('should handle GET request (not allowed)', async () => {
       const handler = createLambdaHandler(server);
 
-      const result = await handler({
+      const result = await handler(asLambdaEvent({
         httpMethod: 'GET',
         headers: {}
-      });
+      }), context);
 
       expect(result.statusCode).toBe(405);
 

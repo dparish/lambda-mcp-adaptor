@@ -81,6 +81,14 @@ interface Request {
     [key: string]: any;
   };
 }
+/**
+ * Common params for any notification.
+ *
+ * @category Common Types
+ */
+interface NotificationParams {
+  _meta?: MetaObject;
+}
 /** @internal */
 interface Notification {
   method: string; // Allow unofficial extensions of `Notification.params` without impacting `NotificationParams`.
@@ -121,6 +129,35 @@ interface JSONRPCRequest extends Request {
 interface JSONRPCNotification extends Notification {
   jsonrpc: typeof JSONRPC_VERSION;
 }
+/* Initialization */
+/**
+ * Parameters for an `initialize` request.
+ *
+ * @example Full client capabilities
+ * {@includeCode ./examples/InitializeRequestParams/full-client-capabilities.json}
+ *
+ * @category `initialize`
+ */
+interface InitializeRequestParams extends RequestParams {
+  /**
+     * The latest version of the Model Context Protocol that the client supports. The client MAY decide to support older versions as well.
+     */
+  protocolVersion: string;
+  capabilities: ClientCapabilities;
+  clientInfo: Implementation;
+}
+/**
+ * This request is sent from the client to the server when it first connects, asking it to begin initialization.
+ *
+ * @example Initialize request
+ * {@includeCode ./examples/InitializeRequest/initialize-request.json}
+ *
+ * @category `initialize`
+ */
+interface InitializeRequest extends JSONRPCRequest {
+  method: 'initialize';
+  params: InitializeRequestParams;
+}
 /**
  * The result returned by the server for an {@link InitializeRequest | initialize} request.
  *
@@ -142,6 +179,118 @@ interface InitializeResult extends Result {
      * This can be used by clients to improve the LLM's understanding of available tools, resources, etc. It can be thought of like a "hint" to the model. For example, this information MAY be added to the system prompt.
      */
   instructions?: string;
+}
+/**
+ * This notification is sent from the client to the server after initialization has finished.
+ *
+ * @example Initialized notification
+ * {@includeCode ./examples/InitializedNotification/initialized-notification.json}
+ *
+ * @category `notifications/initialized`
+ */
+interface InitializedNotification extends JSONRPCNotification {
+  method: 'notifications/initialized';
+  params?: NotificationParams;
+}
+/**
+ * Capabilities a client may support. Known capabilities are defined here, in this schema, but this is not a closed set: any client can define its own, additional capabilities.
+ *
+ * @category `initialize`
+ */
+interface ClientCapabilities {
+  /**
+     * Experimental, non-standard capabilities that the client supports.
+     */
+  experimental?: {
+    [key: string]: object;
+  };
+  /**
+     * Present if the client supports listing roots.
+     *
+     * @example Roots — minimum baseline support
+     * {@includeCode ./examples/ClientCapabilities/roots-minimum-baseline-support.json}
+     *
+     * @example Roots — list changed notifications
+     * {@includeCode ./examples/ClientCapabilities/roots-list-changed-notifications.json}
+     */
+  roots?: {
+    /**
+         * Whether the client supports notifications for changes to the roots list.
+         */
+    listChanged?: boolean;
+  };
+  /**
+     * Present if the client supports sampling from an LLM.
+     *
+     * @example Sampling — minimum baseline support
+     * {@includeCode ./examples/ClientCapabilities/sampling-minimum-baseline-support.json}
+     *
+     * @example Sampling — tool use support
+     * {@includeCode ./examples/ClientCapabilities/sampling-tool-use-support.json}
+     *
+     * @example Sampling — context inclusion support (soft-deprecated)
+     * {@includeCode ./examples/ClientCapabilities/sampling-context-inclusion-support-soft-deprecated.json}
+     */
+  sampling?: {
+    /**
+         * Whether the client supports context inclusion via `includeContext` parameter.
+         * If not declared, servers SHOULD only use `includeContext: "none"` (or omit it).
+         */
+    context?: object;
+    /**
+         * Whether the client supports tool use via `tools` and `toolChoice` parameters.
+         */
+    tools?: object;
+  };
+  /**
+     * Present if the client supports elicitation from the server.
+     *
+     * @example Elicitation — form and URL mode support
+     * {@includeCode ./examples/ClientCapabilities/elicitation-form-and-url-mode-support.json}
+     *
+     * @example Elicitation — form mode only (implicit)
+     * {@includeCode ./examples/ClientCapabilities/elicitation-form-only-implicit.json}
+     */
+  elicitation?: {
+    form?: object;
+    url?: object;
+  };
+  /**
+     * Present if the client supports task-augmented requests.
+     */
+  tasks?: {
+    /**
+         * Whether this client supports {@link ListTasksRequest | tasks/list}.
+         */
+    list?: object;
+    /**
+         * Whether this client supports {@link CancelTaskRequest | tasks/cancel}.
+         */
+    cancel?: object;
+    /**
+         * Specifies which request types can be augmented with tasks.
+         */
+    requests?: {
+      /**
+             * Task support for sampling-related requests.
+             */
+      sampling?: {
+        /**
+                 * Whether the client supports task-augmented `sampling/createMessage` requests.
+                 */
+        createMessage?: object;
+      };
+      /**
+             * Task support for elicitation-related requests.
+             */
+      elicitation?: {
+        /**
+                 * Whether the client supports task-augmented {@link ElicitRequest | elicitation/create} requests.
+                 */
+        create?: object;
+      };
+    };
+  };
 }
 /**
  * Capabilities that a server may support. Known capabilities are defined here, in this schema, but this is not a closed set: any server can define its own, additional capabilities.
@@ -353,6 +502,26 @@ interface Implementation extends BaseMetadata, Icons {
      */
   websiteUrl?: string;
 }
+/* Pagination */
+/**
+ * Common params for paginated requests.
+ *
+ * @example List request with cursor
+ * {@includeCode ./examples/PaginatedRequestParams/list-with-cursor.json}
+ *
+ * @category Common Types
+ */
+interface PaginatedRequestParams extends RequestParams {
+  /**
+     * An opaque token representing the current pagination position.
+     * If provided, the server should return results starting after this cursor.
+     */
+  cursor?: Cursor;
+}
+/** @internal */
+interface PaginatedRequest extends JSONRPCRequest {
+  params?: PaginatedRequestParams;
+}
 /** @internal */
 interface PaginatedResult extends Result {
   /**
@@ -360,6 +529,18 @@ interface PaginatedResult extends Result {
      * If present, there may be more results available.
      */
   nextCursor?: Cursor;
+}
+/* Resources */
+/**
+ * Sent from the client to request a list of resources the server has.
+ *
+ * @example List resources request
+ * {@includeCode ./examples/ListResourcesRequest/list-resources-request.json}
+ *
+ * @category `resources/list`
+ */
+interface ListResourcesRequest extends PaginatedRequest {
+  method: 'resources/list';
 }
 /**
  * The result returned by the server for a {@link ListResourcesRequest | resources/list} request.
@@ -392,6 +573,18 @@ interface ResourceRequestParams extends RequestParams {
  */
 // eslint-disable-next-line @typescript-eslint/no-empty-object-type
 interface ReadResourceRequestParams extends ResourceRequestParams {}
+/**
+ * Sent from the client to the server, to read a specific resource URI.
+ *
+ * @example Read resource request
+ * {@includeCode ./examples/ReadResourceRequest/read-resource-request.json}
+ *
+ * @category `resources/read`
+ */
+interface ReadResourceRequest extends JSONRPCRequest {
+  method: 'resources/read';
+  params: ReadResourceRequestParams;
+}
 /**
  * The result returned by the server for a {@link ReadResourceRequest | resources/read} request.
  *
@@ -484,6 +677,18 @@ interface BlobResourceContents extends ResourceContents {
      */
   blob: string;
 }
+/* Prompts */
+/**
+ * Sent from the client to request a list of prompts and prompt templates the server has.
+ *
+ * @example List prompts request
+ * {@includeCode ./examples/ListPromptsRequest/list-prompts-request.json}
+ *
+ * @category `prompts/list`
+ */
+interface ListPromptsRequest extends PaginatedRequest {
+  method: 'prompts/list';
+}
 /**
  * The result returned by the server for a {@link ListPromptsRequest | prompts/list} request.
  *
@@ -514,6 +719,18 @@ interface GetPromptRequestParams extends RequestParams {
   arguments?: {
     [key: string]: string;
   };
+}
+/**
+ * Used by the client to get a prompt provided by the server.
+ *
+ * @example Get prompt request
+ * {@includeCode ./examples/GetPromptRequest/get-prompt-request.json}
+ *
+ * @category `prompts/get`
+ */
+interface GetPromptRequest extends JSONRPCRequest {
+  method: 'prompts/get';
+  params: GetPromptRequestParams;
 }
 /**
  * The result returned by the server for a {@link GetPromptRequest | prompts/get} request.
@@ -612,6 +829,18 @@ interface EmbeddedResource {
   annotations?: Annotations;
   _meta?: MetaObject;
 }
+/* Tools */
+/**
+ * Sent from the client to request a list of tools the server has.
+ *
+ * @example List tools request
+ * {@includeCode ./examples/ListToolsRequest/list-tools-request.json}
+ *
+ * @category `tools/list`
+ */
+interface ListToolsRequest extends PaginatedRequest {
+  method: 'tools/list';
+}
 /**
  * The result returned by the server for a {@link ListToolsRequest | tools/list} request.
  *
@@ -686,6 +915,18 @@ interface CallToolRequestParams extends TaskAugmentedRequestParams {
   arguments?: {
     [key: string]: unknown;
   };
+}
+/**
+ * Used by the client to invoke a tool provided by the server.
+ *
+ * @example Call tool request
+ * {@includeCode ./examples/CallToolRequest/call-tool-request.json}
+ *
+ * @category `tools/call`
+ */
+interface CallToolRequest extends JSONRPCRequest {
+  method: 'tools/call';
+  params: CallToolRequestParams;
 }
 /**
  * Additional properties describing a {@link Tool} to clients.
@@ -1000,7 +1241,14 @@ declare class MCPServer {
   /**
        * Handle MCP protocol requests
        */
-  handleRequest(request: JSONRPCRequest | JSONRPCNotification): Promise<InitializeResult | ListToolsResult | CallToolResult | ListResourcesResult | ReadResourceResult | ListPromptsResult | GetPromptResult | null>;
+  handleRequest(request: InitializeRequest): Promise<InitializeResult>;
+  handleRequest(request: InitializedNotification): Promise<null>;
+  handleRequest(request: ListToolsRequest): Promise<ListToolsResult>;
+  handleRequest(request: CallToolRequest): Promise<CallToolResult>;
+  handleRequest(request: ListResourcesRequest): Promise<ListResourcesResult>;
+  handleRequest(request: ReadResourceRequest): Promise<ReadResourceResult>;
+  handleRequest(request: ListPromptsRequest): Promise<ListPromptsResult>;
+  handleRequest(request: GetPromptRequest): Promise<GetPromptResult>;
   /**
        * Handle initialize request
        */

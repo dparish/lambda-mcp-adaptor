@@ -228,9 +228,6 @@ var MCPServer = class {
 		});
 		return this;
 	}
-	/**
-	* Handle MCP protocol requests
-	*/
 	async handleRequest(request) {
 		switch (request.method) {
 			case "initialize": return this.handleInitialize();
@@ -405,7 +402,7 @@ async function handleMCPRequest(mcpServer, body, headers, corsHeaders) {
 	} catch (error) {
 		console.error("MCP request error:", error);
 		let errorCode = -32603;
-		let errorMessage = error instanceof Error ? error.message : String(error);
+		const errorMessage = error instanceof Error ? error.message : String(error);
 		if (errorMessage.includes("Method not found")) errorCode = -32601;
 		else if (errorMessage.includes("not found") || errorMessage.includes("required")) errorCode = -32602;
 		return createErrorResponse(500, errorCode, errorMessage, corsHeaders, responseId);

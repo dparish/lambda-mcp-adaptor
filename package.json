@@ -18,10 +18,11 @@
     "LICENSE"
   ],
   "scripts": {
-    "build": "tsdown",
+    "build": "tsdown && npm run typecheck:tests",
     "build:esm": "esbuild src/index.ts --bundle --platform=node --target=node18 --format=esm --outfile=dist/index.mjs --external:zod",
     "build:cjs": "esbuild src/index.ts --bundle --platform=node --target=node18 --format=cjs --outfile=dist/index.js --external:zod",
     "build:types": "tsc -p tsconfig.json && cp src/mcp-spec.d.ts dist/mcp-spec.d.ts",
+    "typecheck:tests": "tsc -p tsconfig.tests.json --noEmit",
     "test": "vitest run",
     "prepublishOnly": "npm run build",
     "dev": "node examples/basic-server.mjs",

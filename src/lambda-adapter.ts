@@ -14,7 +14,7 @@ import type {
   APIGatewayProxyResult,
   Context,
 } from 'aws-lambda';
-import type { AuthConfig } from './auth/index';
+import type { AuthConfig } from './auth';
 import { CORS_HEADERS, withBasicCORS } from './cors-config';
 import type { MCPServer } from './mcp-server';
 
@@ -121,7 +121,11 @@ export async function handleMCPRequest(
   }
 
   try {
-    const result = await mcpServer.handleRequest(jsonRpcMessage);
+    const result = await (
+      mcpServer.handleRequest as (
+        request: JSONRPCRequest | JSONRPCNotification
+      ) => Promise<unknown>
+    )(jsonRpcMessage);
 
     if (result === null) {
       return createResponse('', 204, corsHeaders);
