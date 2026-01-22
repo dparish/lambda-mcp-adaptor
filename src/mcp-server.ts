@@ -34,6 +34,7 @@ import {
   validateWithZod,
   isZodOptional,
 } from './schema-utils';
+import { JSONSchema } from './types';
 
 export interface MCPServerConfig {
   name: string;
@@ -58,15 +59,16 @@ export type PromptHandler<T extends ZodSchema> = (
   args: z.infer<z.ZodObject<T>>
 ) => Promise<GetPromptResult> | GetPromptResult;
 
+type ToolOptions = {
+  outputSchema: Tool['outputSchema'];
+  annotations: Tool['annotations'];
+};
 type ToolRegistration = {
   name: string;
   description: string;
   inputSchema: Tool['inputSchema'];
   handler: (args: Record<string, unknown>) => Promise<CallToolResult>;
-  options?: {
-    outputSchema: Tool['outputSchema'];
-    annotations: Tool['annotations'];
-  };
+  options?: ToolOptions;
 };
 
 type ResourceRegistration = {
@@ -130,8 +132,16 @@ export class MCPServer {
   /**
    * Register a tool with Zod schema validation
    */
-  tool<T extends ZodSchema>(name: string, inputSchema: T, handler: ToolHandler<T>) {
+  tool<T extends ZodSchema>(name: string, inputSchema: T, handler: ToolHandler<T>, options?: {
+    annotations?: Tool['annotations'];
+    outputZodSchema?: ZodSchema;
+  }) {
     const jsonSchema = zodToJsonSchema(inputSchema);
+    let outputSchema: JSONSchema | undefined = undefined;
+    if (options?.outputZodSchema) {
+      outputSchema = zodToJsonSchema(options.outputZodSchema);
+    }
+    // I'm not sure this actually works? Seems like this should be passed as an argument?
     const handlerDescription = (handler as { description?: string }).description;
 
     const validatedHandler = async (args: Record<string, unknown>) => {
@@ -153,6 +163,10 @@ export class MCPServer {
       description: handlerDescription || `Tool: ${name}`,
       inputSchema: jsonSchema as Tool['inputSchema'],
       handler: validatedHandler,
+      options: {
+        outputSchema,
+        annotations: options?.annotations,
+      },
     });
 
     return this;
@@ -272,6 +286,8 @@ export class MCPServer {
       name: tool.name,
       description: tool.description,
       inputSchema: tool.inputSchema,
+      outputSchema: tool.options?.outputSchema,
+      annotations: tool.options?.annotations,
     }));
 
     return { tools };

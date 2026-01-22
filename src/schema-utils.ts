@@ -6,11 +6,12 @@
 
 import { z } from 'zod';
 import type { JSONSchema7, JSONSchema7Type } from 'json-schema';
+import { JSONSchema } from './types';
 
 /**
  * Convert Zod schema to JSON Schema
  */
-export function zodToJsonSchema(zodSchema: z.ZodRawShape): JSONSchema7 {
+export function zodToJsonSchema(zodSchema: z.ZodRawShape): JSONSchema {
   const properties: Record<string, JSONSchema7> = {};
   const required: string[] = [];
 

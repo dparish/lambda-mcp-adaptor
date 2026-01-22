@@ -208,9 +208,9 @@ describe('lambda-mcp-adaptor', () => {
           content: [
             { type: 'text', text: input },
           ],
-          structuredContent: {input}
+          structuredContent: {result: input}
         }
-      })
+      }, {outputZodSchema: z.object({result: z.string()}).shape, annotations: {title: 'human title'}});
 
       const result = await server.handleRequest({
         jsonrpc: '2.0',
@@ -221,8 +221,42 @@ describe('lambda-mcp-adaptor', () => {
           arguments: { input: 'test' },
         },
       });
-      expect(result.structuredContent?.input).toBe('test');
+      expect(result.structuredContent?.result).toBe('test');
 
+      const listResult = await server.handleRequest({
+        jsonrpc: '2.0',
+        id: 1,
+        method: 'tools/list',
+      });
+      expect(listResult).toEqual({
+        tools: [
+          {
+            name: 'structured_test',
+            description: 'Tool: structured_test',
+            annotations: {
+              title: 'human title',
+            },
+            inputSchema: {
+              type: 'object',
+              properties: {
+                input: {
+                  type: 'string',
+                },
+              },
+              required: ['input'],
+            },
+            outputSchema: {
+              type: 'object',
+              properties: {
+                result: {
+                  type: 'string',
+                },
+              },
+              required: ['result'],
+            },
+          },
+        ],
+      });
     })
 
     it('should handle enum validation', async () => {
