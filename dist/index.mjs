@@ -170,8 +170,10 @@ var MCPServer = class {
 	/**
 	* Register a tool with Zod schema validation
 	*/
-	tool(name, inputSchema, handler) {
+	tool(name, inputSchema, handler, options) {
 		const jsonSchema = zodToJsonSchema(inputSchema);
+		let outputSchema = void 0;
+		if (options?.outputZodSchema) outputSchema = zodToJsonSchema(options.outputZodSchema);
 		const handlerDescription = handler.description;
 		const validatedHandler = async (args) => {
 			try {
@@ -185,7 +187,11 @@ var MCPServer = class {
 			name,
 			description: handlerDescription || `Tool: ${name}`,
 			inputSchema: jsonSchema,
-			handler: validatedHandler
+			handler: validatedHandler,
+			options: {
+				outputSchema,
+				annotations: options?.annotations
+			}
 		});
 		return this;
 	}
@@ -266,7 +272,9 @@ var MCPServer = class {
 		return { tools: Array.from(this.tools.values()).map((tool) => ({
 			name: tool.name,
 			description: tool.description,
-			inputSchema: tool.inputSchema
+			inputSchema: tool.inputSchema,
+			outputSchema: tool.options?.outputSchema,
+			annotations: tool.options?.annotations
 		})) };
 	}
 	/**

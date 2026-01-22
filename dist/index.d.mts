@@ -1199,11 +1199,16 @@ type ZodSchema = z.ZodRawShape;
 type ToolHandler<T extends ZodSchema> = (args: z.infer<z.ZodObject<T>>) => Promise<CallToolResult> | CallToolResult;
 type ResourceHandler = (uri: string) => Promise<ReadResourceResult> | ReadResourceResult;
 type PromptHandler<T extends ZodSchema> = (args: z.infer<z.ZodObject<T>>) => Promise<GetPromptResult> | GetPromptResult;
+type ToolOptions = {
+  outputSchema: Tool['outputSchema'];
+  annotations: Tool['annotations'];
+};
 type ToolRegistration = {
   name: string;
   description: string;
   inputSchema: Tool['inputSchema'];
   handler: (args: Record<string, unknown>) => Promise<CallToolResult>;
+  options?: ToolOptions;
 };
 type ResourceRegistration = {
   name: string;
@@ -1229,7 +1234,10 @@ declare class MCPServer {
   /**
        * Register a tool with Zod schema validation
        */
-  tool<T extends ZodSchema>(name: string, inputSchema: T, handler: ToolHandler<T>): this;
+  tool<T extends ZodSchema>(name: string, inputSchema: T, handler: ToolHandler<T>, options?: {
+    annotations?: Tool['annotations'];
+    outputZodSchema?: ZodSchema;
+  }): this;
   /**
        * Register a resource
        */

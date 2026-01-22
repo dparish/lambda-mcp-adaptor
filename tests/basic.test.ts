@@ -200,6 +200,65 @@ describe('lambda-mcp-adaptor', () => {
       expect(result.content[0].text).toBe('test, none, 42');
     });
 
+    it('should handle tool call with structured output', async () => {
+      server.tool('structured_test', {
+        input: z.string()
+      }, async ({ input }) => {
+        return {
+          content: [
+            { type: 'text', text: input },
+          ],
+          structuredContent: {result: input}
+        }
+      }, {outputZodSchema: z.object({result: z.string()}).shape, annotations: {title: 'human title'}});
+
+      const result = await server.handleRequest({
+        jsonrpc: '2.0',
+        id: 1,
+        method: 'tools/call',
+        params: {
+          name: 'structured_test',
+          arguments: { input: 'test' },
+        },
+      });
+      expect(result.structuredContent?.result).toBe('test');
+
+      const listResult = await server.handleRequest({
+        jsonrpc: '2.0',
+        id: 1,
+        method: 'tools/list',
+      });
+      expect(listResult).toEqual({
+        tools: [
+          {
+            name: 'structured_test',
+            description: 'Tool: structured_test',
+            annotations: {
+              title: 'human title',
+            },
+            inputSchema: {
+              type: 'object',
+              properties: {
+                input: {
+                  type: 'string',
+                },
+              },
+              required: ['input'],
+            },
+            outputSchema: {
+              type: 'object',
+              properties: {
+                result: {
+                  type: 'string',
+                },
+              },
+              required: ['result'],
+            },
+          },
+        ],
+      });
+    })
+
     it('should handle enum validation', async () => {
       server.tool('enum_test', {
         operation: z.enum(['add', 'subtract', 'multiply'])
