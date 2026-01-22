@@ -200,6 +200,31 @@ describe('lambda-mcp-adaptor', () => {
       expect(result.content[0].text).toBe('test, none, 42');
     });
 
+    it('should handle tool call with structured output', async () => {
+      server.tool('structured_test', {
+        input: z.string()
+      }, async ({ input }) => {
+        return {
+          content: [
+            { type: 'text', text: input },
+          ],
+          structuredContent: {input}
+        }
+      })
+
+      const result = await server.handleRequest({
+        jsonrpc: '2.0',
+        id: 1,
+        method: 'tools/call',
+        params: {
+          name: 'structured_test',
+          arguments: { input: 'test' },
+        },
+      });
+      expect(result.structuredContent?.input).toBe('test');
+
+    })
+
     it('should handle enum validation', async () => {
       server.tool('enum_test', {
         operation: z.enum(['add', 'subtract', 'multiply'])

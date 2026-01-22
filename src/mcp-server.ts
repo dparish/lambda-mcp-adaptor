@@ -63,6 +63,10 @@ type ToolRegistration = {
   description: string;
   inputSchema: Tool['inputSchema'];
   handler: (args: Record<string, unknown>) => Promise<CallToolResult>;
+  options?: {
+    outputSchema: Tool['outputSchema'];
+    annotations: Tool['annotations'];
+  };
 };
 
 type ResourceRegistration = {
